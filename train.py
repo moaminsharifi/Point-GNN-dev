@@ -1,17 +1,43 @@
 """This file defines the training process of Point-GNN object detection."""
+"""
 
+Python Buitl-in libraries:
+    os: path manager for dataset
+    time: calculate excute time
+    argparse: make python cli app
+    sys.getsizeof: get size of some thing
+    multiprocessing.Pool , multiprocessing.Queue, multiprocessing.Process: multi process libs
+
+"""
 import os
 import time
 import argparse
 import copy
 from sys import getsizeof
 from multiprocessing import Pool, Queue, Process
-
+"""
+Python libraries:
+    numpy: working with numbers
+    tensorflow: deep net model 
+"""
 import numpy as np
 import tensorflow as tf
+"""
+Written libraries:
+    dataset.kitti_dataset.KittiDataset: Dataset Manager Class
+    models.graph_gen.get_graph_generate_fn:  get model from factory function
+    models.models.get_model:  get model from factory function
+    models.box_encoding.*: []
+    models.crop_aug.CropAugSampler: Augmentation
+    models.preprocess: preprocess data
+    util.tf_util.*: load, save confings
+    util.summary_util.*: write summary
 
+"""
 from dataset.kitti_dataset import KittiDataset
+
 from models.graph_gen import get_graph_generate_fn
+
 from models.models import get_model
 from models.box_encoding import get_box_decoding_fn, get_box_encoding_fn,\
     get_encoding_len
@@ -22,6 +48,11 @@ from util.config_util import save_config, save_train_config, \
     load_train_config, load_config
 from util.summary_util import write_summary_scale
 
+
+"""
+argparse.ArgumentParser: for create CLI version of code
+
+"""
 parser = argparse.ArgumentParser(description='Training of PointGNN')
 parser.add_argument('train_config_path', type=str,
                    help='Path to train_config')
@@ -38,17 +69,24 @@ parser.add_argument('--dataset_split_file', type=str,
 args = parser.parse_args()
 train_config = load_train_config(args.train_config_path)
 DATASET_DIR = args.dataset_root_dir
-if args.dataset_split_file == '':
+if args.dataset_split_file == '': # if dataset dir not set load default dataset
     DATASET_SPLIT_FILE = os.path.join(DATASET_DIR,
         './3DOP_splits/'+train_config['train_dataset'])
 else:
     DATASET_SPLIT_FILE = args.dataset_split_file
+
 config_complete = load_config(args.config_path)
 if 'train' in config_complete:
     config = config_complete['train']
 else:
     config = config_complete
+# better way config_complete.get('train' , config_complete)
+
 # input function ==============================================================
+"""
+input function: Load default confing
+
+"""
 dataset = KittiDataset(
     os.path.join(DATASET_DIR, 'image/training/image_2'),
     os.path.join(DATASET_DIR, 'velodyne/training/velodyne/'),
@@ -56,6 +94,7 @@ dataset = KittiDataset(
     os.path.join(DATASET_DIR, 'labels/training/label_2'),
     DATASET_SPLIT_FILE,
     num_classes=config['num_classes'])
+
 NUM_CLASSES = dataset.num_classes
 
 if 'NUM_TEST_SAMPLE' not in train_config:
@@ -171,27 +210,33 @@ def batch_data(batch_list):
         batched_encoded_boxes, batched_valid_boxes)
 
 # model =======================================================================
+# set copy per GPU
 if 'COPY_PER_GPU' in train_config:
     COPY_PER_GPU = train_config['COPY_PER_GPU']
 else:
     COPY_PER_GPU = 1
-NUM_GPU = train_config['NUM_GPU']
+
+NUM_GPU = train_config['NUM_GPU'] 
+
 input_tensor_sets = []
-for gi in range(NUM_GPU):
+
+for gi in range(NUM_GPU): # iter all gpus
     with tf.device('/gpu:%d'%gi):
-        for cp_idx in range(COPY_PER_GPU):
+        for cp_idx in range(COPY_PER_GPU): # copy per gpu
+            
+            # set input size as placeholder
             if config['input_features'] == 'irgb':
                 t_initial_vertex_features = tf.placeholder(
-                    dtype=tf.float32, shape=[None, 4])
+                    dtype = tf.float32, shape=[None, 4])
             elif config['input_features'] == 'rgb':
                 t_initial_vertex_features = tf.placeholder(
-                    dtype=tf.float32, shape=[None, 3])
+                    dtype = tf.float32, shape=[None, 3])
             elif config['input_features'] == '0000':
                 t_initial_vertex_features = tf.placeholder(
-                    dtype=tf.float32, shape=[None, 4])
+                    dtype = tf.float32, shape=[None, 4])
             elif config['input_features'] == 'i000':
                 t_initial_vertex_features = tf.placeholder(
-                    dtype=tf.float32, shape=[None, 4])
+                    dtype = tf.float32, shape=[None, 4])
             elif config['input_features'] == 'i':
                 t_initial_vertex_features = tf.placeholder(
                     dtype=tf.float32, shape=[None, 1])
@@ -201,6 +246,7 @@ for gi in range(NUM_GPU):
 
             t_vertex_coord_list = [
                 tf.placeholder(dtype=tf.float32, shape=[None, 3])]
+
             for _ in range(len(config['graph_gen_kwargs']['level_configs'])):
                 t_vertex_coord_list.append(
                     tf.placeholder(dtype=tf.float32, shape=[None, 3]))
@@ -225,13 +271,18 @@ for gi in range(NUM_GPU):
             model = get_model(config['model_name'])(num_classes=NUM_CLASSES,
                 box_encoding_len=BOX_ENCODING_LEN, mode='train',
                 **config['model_kwargs'])
+
             t_logits, t_pred_box = model.predict(
                 t_initial_vertex_features, t_vertex_coord_list,
                 t_keypoint_indices_list, t_edges_list, t_is_training)
-            t_probs = model.postprocess(t_logits)
-            t_predictions = tf.argmax(t_probs, axis=-1, output_type=tf.int32)
+            
+            t_probs = model.postprocess(t_logits) # apply softmax
+
+            t_predictions = tf.argmax(t_probs, axis=-1, output_type=tf.int32) # get class predictions 
+            
             t_loss_dict = model.loss(t_logits, t_class_labels, t_pred_box,
-                t_encoded_gt_boxes, t_valid_gt_boxes, **config['loss'])
+                                     t_encoded_gt_boxes, t_valid_gt_boxes, **config['loss'])  # Output loss value.
+
             t_cls_loss = t_loss_dict['cls_loss']
             t_loc_loss = t_loss_dict['loc_loss']
             t_reg_loss = t_loss_dict['reg_loss']
@@ -239,6 +290,7 @@ for gi in range(NUM_GPU):
             t_num_valid_endpoint = t_loss_dict['num_valid_endpoint']
             t_classwise_loc_loss = t_loss_dict['classwise_loc_loss']
             t_total_loss = t_cls_loss + t_loc_loss + t_reg_loss
+
             input_tensor_sets.append(
                 {'t_initial_vertex_features': t_initial_vertex_features,
                  't_vertex_coord_list': t_vertex_coord_list,
@@ -287,6 +339,8 @@ if 'unify_copies' in train_config:
                 +input_tensor_sets[ti]['t_loc_loss']\
                 +input_tensor_sets[ti]['t_reg_loss']
 
+
+# mean loss cross gpus
 t_cls_loss_cross_gpu = tf.reduce_mean([t['t_cls_loss']
     for t in input_tensor_sets])
 t_loc_loss_cross_gpu = tf.reduce_mean([t['t_loc_loss']
@@ -303,9 +357,11 @@ t_probs = input_tensor_sets[0]['t_probs']
 t_classwise_loc_loss_update_ops = {}
 for class_idx in range(NUM_CLASSES):
     for bi in range(BOX_ENCODING_LEN):
+
         classwise_loc_loss_ind =tf.reduce_sum(
             [input_tensor_sets[gi]['t_classwise_loc_loss'][class_idx][bi]
                 for gi in range(len(input_tensor_sets))])
+
         t_mean_loss, t_mean_loss_op = tf.metrics.mean(
             classwise_loc_loss_ind,
             name=('loc_loss_cls_%d_box_%d'%(class_idx, bi)))
@@ -391,10 +447,14 @@ optimizer_kwargs_dict = {
 }
 optimizer_class = optimizer_dict[train_config['optimizer']]
 optimizer_kwargs = optimizer_kwargs_dict[train_config['optimizer']]
+
 if 'optimizer_kwargs' in train_config:
     optimizer_kwargs.update(train_config['optimizer_kwargs'])
+
 optimizer = optimizer_class(t_learning_rate, **optimizer_kwargs)
 grads_cross_gpu = []
+# first run update_ops from line 435 then other tings
+# https://devdocs.io/tensorflow~1.15/graph#control_dependencies
 with tf.control_dependencies(update_ops):
     for gi in range(NUM_GPU):
         with tf.device('/gpu:%d'%gi):
@@ -407,6 +467,7 @@ fetches = {
     'train_op': train_op,
     'step': global_step,
     'learning_rate': t_learning_rate,
+    
 }
 fetches.update(metrics_update_ops)
 
@@ -495,6 +556,7 @@ batch_size = train_config.get('batch_size', 1)
 print('batch size=' + str(batch_size))
 saver = tf.train.Saver()
 graph = tf.get_default_graph()
+
 if train_config['gpu_memusage'] < 0:
     gpu_options = tf.GPUOptions(allow_growth=True)
 else:
@@ -503,24 +565,34 @@ else:
     else:
         gpu_options = tf.GPUOptions(
             per_process_gpu_memory_fraction=train_config['gpu_memusage'])
+
 batch_ctr = 0
 batch_gradient_list = []
+
 with tf.Session(graph=graph,
     config=tf.ConfigProto(
     allow_soft_placement=True, gpu_options=gpu_options,)) as sess:
+
+
     sess.run(tf.variables_initializer(tf.global_variables()))
     states = tf.train.get_checkpoint_state(train_config['train_dir'])
+
     if states is not None:
         print('Restore from checkpoint %s' % states.model_checkpoint_path)
         saver.restore(sess, states.model_checkpoint_path)
         saver.recover_last_checkpoints(states.all_model_checkpoint_paths)
+    
     previous_step = sess.run(global_step)
     local_variables_initializer = tf.variables_initializer(tf.local_variables())
+
     for epoch_idx in range((previous_step*batch_size)//NUM_TEST_SAMPLE,
     train_config['max_epoch']):
+
         sess.run(local_variables_initializer)
         start_time = time.time()
+
         frame_idx_list = np.random.permutation(NUM_TEST_SAMPLE)
+
         for batch_idx in range(0, NUM_TEST_SAMPLE-batch_size+1, batch_size):
             mid_time = time.time()
             device_batch_size = batch_size//(COPY_PER_GPU*NUM_GPU)
@@ -529,20 +601,25 @@ with tf.Session(graph=graph,
                 batch_frame_idx_list = frame_idx_list[
                     batch_idx+\
                     gi*device_batch_size:batch_idx+(gi+1)*device_batch_size]
+
                 input_v, vertex_coord_list, keypoint_indices_list, edges_list, \
                 cls_labels, encoded_boxes, valid_boxes \
                     = data_provider.provide_batch(batch_frame_idx_list)
+
                 t_initial_vertex_features = \
                     input_tensor_sets[gi]['t_initial_vertex_features']
+
                 t_class_labels = input_tensor_sets[gi]['t_class_labels']
                 t_encoded_gt_boxes = input_tensor_sets[gi]['t_encoded_gt_boxes']
                 t_valid_gt_boxes = input_tensor_sets[gi]['t_valid_gt_boxes']
                 t_is_training = input_tensor_sets[gi]['t_is_training']
                 t_edges_list = input_tensor_sets[gi]['t_edges_list']
+
                 t_keypoint_indices_list = \
                     input_tensor_sets[gi]['t_keypoint_indices_list']
                 t_vertex_coord_list = \
                     input_tensor_sets[gi]['t_vertex_coord_list']
+
                 feed_dict = {
                     t_initial_vertex_features: input_v,
                     t_class_labels: cls_labels,
@@ -556,6 +633,7 @@ with tf.Session(graph=graph,
                 feed_dict.update(
                     dict(zip(t_vertex_coord_list, vertex_coord_list)))
                 total_feed_dict.update(feed_dict)
+
             if train_config.get('is_pseudo_batch', False):
                 tf_gradient = [g for g, v in grads_cross_gpu]
                 batch_gradient = sess.run(tf_gradient,
@@ -591,6 +669,7 @@ with tf.Session(graph=graph,
                     save_config(config_path, config_complete)
                     save_train_config(train_config_path, train_config)
                     raise SystemExit
+
         print('STEP: %d, epoch_idx: %d, lr: %f, time cost: %f'
             % (results['step'], epoch_idx, results['learning_rate'],
             time.time()-start_time))
