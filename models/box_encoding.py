@@ -3,24 +3,113 @@
 import numpy as np
 
 def direct_box_encoding(cls_labels, points_xyz, boxes_3d):
+    """Return a direct box encoding for direct_box_xy .
+
+    [extended_summary]
+
+    Parameters
+    ----------
+    cls_labels : [type]
+        
+    points_xyz : [type]
+        
+    boxes_3d : [type]
+       
+
+    Returns
+    -------
+    
+        return inputted boxes_3d
+    """
     return boxes_3d
 
 def direct_box_decoding(cls_labels, points_xyz, encoded_boxes):
+    """Decodes a direct box encoding .
+
+
+    Parameters
+    ----------
+    cls_labels : [type]
+       
+    points_xyz : [type]
+       
+    encoded_boxes : [type]
+      
+
+    Returns
+    -------
+    encoded_boxes
+         return inputted encoded_boxes
+    """
     return encoded_boxes
 
 def center_box_encoding(cls_labels, points_xyz, boxes_3d):
+    """Compute center - of - box encoding of center - box .
+
+
+    Parameters
+    ----------
+    cls_labels : [type]
+    points_xyz : [type]
+    boxes_3d : [type]
+
+
+    Returns
+    -------
+    boxes_3d
+         return centerized box encoding
+    """
     boxes_3d[:, 0] = boxes_3d[:, 0] - points_xyz[:, 0]
     boxes_3d[:, 1] = boxes_3d[:, 1] - points_xyz[:, 1]
     boxes_3d[:, 2] = boxes_3d[:, 2] - points_xyz[:, 2]
+
     return boxes_3d
 
+
+
 def center_box_decoding(cls_labels, points_xyz, encoded_boxes):
+    """Perform center - box encoding on center - box .
+
+    [extended_summary]
+
+    Parameters
+    ----------
+    cls_labels : [type]
+        [description]
+    points_xyz : [type]
+        [description]
+    encoded_boxes : [type]
+        [description]
+
+    Returns
+    -------
+    encoded_boxes
+         return centerized box encoding
+    """
     encoded_boxes[:, 0] = encoded_boxes[:, 0] + points_xyz[:, 0]
     encoded_boxes[:, 1] = encoded_boxes[:, 1] + points_xyz[:, 1]
     encoded_boxes[:, 2] = encoded_boxes[:, 2] + points_xyz[:, 2]
     return encoded_boxes
 
 def voxelnet_box_encoding(cls_labels, points_xyz, boxes_3d):
+    """Given three points of 3D boxes and 3D labels compute the box encoding of the 3D box of the 3D box .
+
+    
+
+    Parameters
+    ----------
+    cls_labels : [type]
+        labels as list
+    points_xyz : [type]
+        points as numpy array or tensors
+    boxes_3d : [type]
+        boxes_3d as numpy array or tensors
+
+    Returns
+    -------
+    boxes_3d
+        [description]
+    """
     # offset
     boxes_3d[:, 0] = boxes_3d[:, 0] - points_xyz[:, 0]
     boxes_3d[:, 1] = boxes_3d[:, 1] - points_xyz[:, 1]
@@ -46,6 +135,24 @@ def voxelnet_box_encoding(cls_labels, points_xyz, boxes_3d):
     return boxes_3d
 
 def voxelnet_box_decoding(cls_labels, points_xyz, encoded_boxes):
+    """Given three points of 3D boxes and 3D labels compute the box encoding of the 3D box of the 3D box .
+
+    
+
+    Parameters
+    ----------
+    cls_labels : [type]
+        labels as list
+    points_xyz : [type]
+        points as numpy array or tensors
+    boxes_3d : [type]
+        boxes_3d as numpy array or tensors
+
+    Returns
+    -------
+    boxes_3d
+        [description]
+    """
     # Car
     mask = cls_labels[:, 0] == 2
     encoded_boxes[mask, 0] = encoded_boxes[mask, 0]*3.9
@@ -71,10 +178,26 @@ def voxelnet_box_decoding(cls_labels, points_xyz, encoded_boxes):
     return encoded_boxes
 
 def classaware_voxelnet_box_encoding(cls_labels, points_xyz, boxes_3d):
+    """Encode a 3D box - wise box - wise box - aware box - wise box - wise box - wise .
+
+    [extended_summary]
+
+    Parameters
+    ----------
+    cls_labels : [type]
+      
+    points_xyz : [type]
+
+    boxes_3d : [type]
+  
+
+    Returns
+    -------
+    [type]
+        [description]
     """
-    Args:
-        boxes_3d: [None, num_classes, 7]
-    """
+
+   
     encoded_boxes_3d = np.zeros_like(boxes_3d)
     num_classes = boxes_3d.shape[1]
     points_xyz = np.expand_dims(points_xyz, axis=1)

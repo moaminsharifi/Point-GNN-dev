@@ -45,6 +45,7 @@ class MultiLayerFastLocalGraphModelV2(object):
             self._regularizer = regularizer_dict[regularizer_type](
                 **regularizer_kwargs)
         self._layer_configs = layer_configs
+
         self._default_layers_type = {
             'scatter_max_point_set_pooling': gnn.PointSetPooling(
                 point_feature_fn=gnn.multi_layer_neural_network_fn,
@@ -116,6 +117,7 @@ class MultiLayerFastLocalGraphModelV2(object):
                 tfeatures_list = []
                 tfeatures = t_initial_vertex_features
                 tfeatures_list.append(tfeatures)
+
                 for idx in range(len(self._layer_configs)-1):
                     layer_config = self._layer_configs[idx]
                     layer_scope = layer_config['scope']
@@ -125,13 +127,16 @@ class MultiLayerFastLocalGraphModelV2(object):
                     t_vertex_coordinates = t_vertex_coord_list[graph_level]
                     t_keypoint_indices = t_keypoint_indices_list[graph_level]
                     t_edges = t_edges_list[graph_level]
-                    with tf.variable_scope(layer_scope, reuse=tf.AUTO_REUSE):
-                        flgn = self._default_layers_type[layer_type]
+                    with tf.variable_scope(layer_scope, reuse=tf.AUTO_REUSE): # reuse for save last context from some where saved in  memory
+                        flgn = self._default_layers_type[layer_type] # get some model from line 49 
                         print('@ level %d Graph, Add layer: %s, type: %s'%
                             (graph_level, layer_scope, layer_type))
+                        
+                        # check if set some device then use device contex to run on specific device
                         if 'device' in layer_config:
                             with tf.device(layer_config['device']):
-                                tfeatures = flgn.apply_regular(
+                                # apply a features extraction from point sets. from gnn.py:225
+                                tfeatures = flgn.apply_regular( 
                                     tfeatures,
                                     t_vertex_coordinates,
                                     t_keypoint_indices,
@@ -147,14 +152,17 @@ class MultiLayerFastLocalGraphModelV2(object):
 
                         tfeatures_list.append(tfeatures)
                         print('Feature Dim:' + str(tfeatures.shape[-1]))
+                
                 predictor_config = self._layer_configs[-1]
+
                 assert (predictor_config['type']=='classaware_predictor' or
                     predictor_config['type']=='classaware_predictor_128' or
                     predictor_config['type']=='classaware_separated_predictor')
-                predictor = self._default_layers_type[predictor_config['type']]
+
+                predictor = self._default_layers_type[predictor_config['type']] # get some model from line 49 
                 print('Final Feature Dim:'+str(tfeatures.shape[-1]))
                 with tf.variable_scope(predictor_config['scope'],
-                reuse=tf.AUTO_REUSE):
+                reuse=tf.AUTO_REUSE):  # reuse for save last context from some where saved in  memory
                     logits, box_encodings =  predictor.apply_regular(tfeatures,
                         num_classes=self.num_classes,
                         box_encoding_len=self.box_encoding_len,

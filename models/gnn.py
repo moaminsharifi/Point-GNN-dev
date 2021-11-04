@@ -4,16 +4,35 @@ from functools import partial
 
 import tensorflow as tf
 import numpy as np
-import tensorflow.contrib.slim as slim
+import tensorflow.contrib.slim as slim # use for simpler model creation
 
-def instance_normalization(features):
+def instance_normalization(features) :
+    """Applies the instance normalization to the features in the input features .
+
+    Dude to Documention of Tensorflow features must be "Input Tensor of arbitrary dimensionality."
+    Docs : https://www.tensorflow.org/api_docs/python/tf/nn/batch_normalization
+
+    Parameters
+    ----------
+    features : prob Input Tensor of arbitrary dimensionality.
+        set of features
+
+    Return: 
+    ----------
+    (features):
+        Tuple which contains one element 
+    """
     with tf.variable_scope(None, default_name='IN'):
+        # Calculates the mean and variance of x.
         mean, variance = tf.nn.moments(
             features, [0], name='IN_stats', keep_dims=True)
+        
         features = tf.nn.batch_normalization(
             features, mean, variance, None, None, 1e-12, name='IN_apply')
-    return(features)
+    
+    return (features)
 
+# dictionary with diffrent batch norm function
 normalization_fn_dict = {
     'fused_BN_center': slim.batch_norm,
     'BN': partial(slim.batch_norm, fused=False, center=False),
@@ -21,6 +40,8 @@ normalization_fn_dict = {
     'IN': instance_normalization,
     'NONE': None
 }
+
+# dictionary with diffrent activation function
 activation_fn_dict = {
     'ReLU': tf.nn.relu,
     'ReLU6': tf.nn.relu6,
@@ -197,14 +218,17 @@ class ClassAwareSeparatedPredictor(object):
             with tf.variable_scope('loc'):
                 for class_idx in range(num_classes):
                     with tf.variable_scope('cls_%d' % class_idx):
+
                         box_encodings = self._loc_fn(
                             features_splits[class_idx],
                             num_classes=box_encoding_len,
                             is_logits=True,
                             normalization_type=normalization_type,
                             activation_type=activation_type)
+
                         box_encodings = tf.expand_dims(box_encodings, axis=1)
                         box_encodings_list.append(box_encodings)
+                        
             box_encodings = tf.concat(box_encodings_list, axis=1)
         return logits, box_encodings
 
